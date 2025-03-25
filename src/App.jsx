@@ -361,7 +361,7 @@ function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1>Car Rental System</h1>
+        <h1>Rent Flow</h1>
         <nav className="nav">
           <button
             className={`nav-btn ${page === "cars" ? "active" : ""}`}
