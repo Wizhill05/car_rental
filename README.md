@@ -47,6 +47,10 @@ The system uses SQLite with the following tables:
 - rentals: Tracks car rentals (id, car_id, user_id, start_date, end_date, total_amount, active)
 - reviews: Stores user reviews (id, rental_id, rating, comment, created_at)
 
+  ER Diagram
+![image](https://github.com/user-attachments/assets/f152a3a7-aeac-4f96-99e4-6a8844bc09e1)
+
+
 ## API Endpoints
 
 - GET /api/cars - List all cars
