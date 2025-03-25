@@ -1,0 +1,46 @@
+@startuml Car Rental Database Schema
+
+' Entity definitions
+entity "cars" {
+  *id: INTEGER <<PK>>
+  --
+  *name: TEXT
+  *type: TEXT
+  *rate_per_day: REAL
+  *available: BOOLEAN
+}
+
+entity "users" {
+  *id: INTEGER <<PK>>
+  --
+  *name: TEXT
+  *phone: TEXT <<UNIQUE>>
+  *license_no: TEXT <<UNIQUE>>
+}
+
+entity "rentals" {
+  *id: INTEGER <<PK>>
+  --
+  *car_id: INTEGER <<FK>>
+  *user_id: INTEGER <<FK>>
+  *start_date: DATETIME
+  *end_date: DATETIME
+  *total_amount: REAL
+  *active: BOOLEAN
+}
+
+entity "reviews" {
+  *id: INTEGER <<PK>>
+  --
+  *rental_id: INTEGER <<FK>>
+  *rating: INTEGER
+  *comment: TEXT
+  *created_at: DATETIME
+}
+
+' Relationships
+cars ||--o{ rentals : has
+users ||--o{ rentals : makes
+rentals ||--o{ reviews : receives
+
+@enduml
