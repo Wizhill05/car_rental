@@ -18,15 +18,34 @@ const db = new sqlite3.Database(DBSOURCE, (err) => {
       )`
     );
 
-    // Create users table
+// Create users table
     db.run(
       `CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         phone TEXT UNIQUE NOT NULL,
-        license_no TEXT UNIQUE NOT NULL
+        license_no TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL
       )`
     );
+
+    // Add email column to existing users table if it doesn't exist
+    db.all(`PRAGMA table_info(users)`, [], (err, rows) => {
+      if (err) {
+        console.error("Error checking users table schema", err);
+      } else {
+        const emailColumnExists = rows.some(row => row.name === 'email');
+        if (!emailColumnExists) {
+          db.run(`ALTER TABLE users ADD COLUMN email TEXT UNIQUE`, (err) => {
+            if (err) {
+              console.error("Error adding email column to users table", err);
+            } else {
+              console.log("Added email column to users table");
+            }
+          });
+        }
+      }
+    });
 
     // Create rentals table with foreign key constraints
     db.run(

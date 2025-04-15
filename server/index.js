@@ -1,12 +1,117 @@
 import express from "express";
 import cors from "cors";
 import db from "./db.js";
+import nodemailer from "nodemailer";
+import cron from "node-cron";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
-const port = 5000;
+const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// Configure nodemailer
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// Verify transporter configuration
+transporter.verify(function(error, success) {
+  if (error) {
+    console.log("Error verifying email configuration:", error);
+  } else {
+    console.log("Email server is ready to send messages");
+  }
+});
+
+// Function to send email
+const sendEmail = async (to, subject, text) => {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error("Email credentials are missing. Please check your .env file.");
+    return;
+  }
+
+  try {
+    await transporter.sendMail({
+      from: `"Car Rental Service" <${process.env.EMAIL_USER}>`,
+      to,
+      subject,
+      text
+    });
+    console.log(`Email sent to ${to}`);
+  } catch (error) {
+    console.error("Error sending email:", error);
+    if (error.code === 'EAUTH') {
+      console.error("Authentication failed. Please check your email credentials.");
+    }
+  }
+};
+
+// Function to check for expiring rentals and send notifications
+const checkExpiringRentals = (daysAhead = 1) => {
+  return new Promise((resolve, reject) => {
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + daysAhead);
+    const targetDateStr = targetDate.toISOString().split('T')[0];
+
+    db.all(
+      `SELECT r.*, u.email, u.name as user_name, c.name as car_name
+       FROM rentals r
+       JOIN users u ON r.user_id = u.id
+       JOIN cars c ON r.car_id = c.id
+       WHERE r.end_date = ? AND r.active = 1`,
+      [targetDateStr],
+      (err, rows) => {
+        if (err) {
+          console.error("Error checking expiring rentals:", err);
+          reject(err);
+          return;
+        }
+
+        const emailPromises = rows.map(rental => 
+          sendEmail(
+            rental.email,
+            "Your car rental is expiring soon",
+            `Dear ${rental.user_name},\n\nYour rental for ${rental.car_name} is expiring on ${rental.end_date}. Please ensure to return the vehicle on time.\n\nThank you for using our service!`
+          )
+        );
+
+        Promise.all(emailPromises)
+          .then(() => resolve(rows.length))
+          .catch(reject);
+      }
+    );
+  });
+};
+
+// Schedule the expiring rentals check to run daily at midnight
+cron.schedule('0 0 * * *', () => {
+  checkExpiringRentals(1)
+    .then(count => console.log(`Sent ${count} expiration reminder emails`))
+    .catch(err => console.error("Error in scheduled expiration check:", err));
+});
+
+// New endpoint to manually trigger expiration emails
+app.post("/api/send-expiration-emails", async (req, res) => {
+  try {
+    const today = await checkExpiringRentals(0);
+    const tomorrow = await checkExpiringRentals(1);
+    const dayAfterTomorrow = await checkExpiringRentals(2);
+    
+    const totalSent = today + tomorrow + dayAfterTomorrow;
+    res.json({ message: `Sent ${totalSent} expiration reminder emails` });
+  } catch (error) {
+    console.error("Error sending expiration emails:", error);
+    res.status(500).json({ error: "Failed to send expiration emails" });
+  }
+});
 
 // Helper function to get car by id
 const getCar = (id) => {
@@ -85,27 +190,39 @@ app.post("/api/cars", (req, res) => {
 // USER ENDPOINTS
 
 // Register new user
-app.post("/api/users", (req, res) => {
-  const { name, phone, license_no } = req.body;
-  if (!name || !phone || !license_no) {
+app.post("/api/users", async (req, res) => {
+  const { name, phone, license_no, email } = req.body;
+  if (!name || !phone || !license_no || !email) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
   db.run(
-    "INSERT INTO users (name, phone, license_no) VALUES (?, ?, ?)",
-    [name, phone, license_no],
-    function (err) {
+    "INSERT INTO users (name, phone, license_no, email) VALUES (?, ?, ?, ?)",
+    [name, phone, license_no, email],
+    async function (err) {
       if (err) {
         if (err.message.includes("UNIQUE")) {
           res
             .status(400)
-            .json({ error: "Phone or license number already exists" });
+            .json({ error: "Phone, license number, or email already exists" });
           return;
         }
         res.status(500).json({ error: err.message });
         return;
       }
-      res.json({ id: this.lastID });
+
+      // Send confirmation email
+      try {
+        await sendEmail(
+          email,
+          "Welcome to Car Rental Service",
+          `Dear ${name},\n\nThank you for registering with our Car Rental Service. Your account has been successfully created.\n\nBest regards,\nCar Rental Service Team`
+        );
+      } catch (emailError) {
+        console.error("Error sending confirmation email:", emailError);
+      }
+
+      res.json({ id: this.lastID, message: "User registered successfully. A confirmation email has been sent." });
     }
   );
 });
