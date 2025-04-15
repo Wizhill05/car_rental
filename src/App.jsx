@@ -243,6 +243,7 @@ function App() {
     name: "",
     phone: "",
     license_no: "",
+    email: "",
   });
 
   // Rental form state
@@ -257,6 +258,19 @@ function App() {
     rating: 5,
     comment: "",
   });
+
+  // Handle sending expiration emails
+  const handleSendExpirationEmails = async () => {
+    try {
+      const res = await fetch(`${backendUrl}/api/send-expiration-emails`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      setMessage(data.message);
+    } catch (err) {
+      setMessage("Error sending expiration emails");
+    }
+  };
 
   // Handle review submission
   const handleReviewSubmit = async (e) => {
@@ -308,8 +322,8 @@ function App() {
       if (data.error) {
         setMessage(data.error);
       } else {
-        setMessage("User registered successfully!");
-        setUserForm({ name: "", phone: "", license_no: "" });
+        setMessage(data.message || "User registered successfully!");
+        setUserForm({ name: "", phone: "", license_no: "", email: "" });
       }
     } catch (err) {
       setMessage("Error registering user");
@@ -392,6 +406,12 @@ function App() {
             onClick={() => setPage("register")}
           >
             Register
+          </button>
+          <button
+            className="nav-btn"
+            onClick={handleSendExpirationEmails}
+          >
+            Send Expiration Emails
           </button>
         </nav>
       </header>
@@ -587,6 +607,15 @@ function App() {
                 value={userForm.license_no}
                 onChange={(e) =>
                   setUserForm({ ...userForm, license_no: e.target.value })
+                }
+                required
+              />
+              <input
+                type="email"
+                placeholder="Email"
+                value={userForm.email}
+                onChange={(e) =>
+                  setUserForm({ ...userForm, email: e.target.value })
                 }
                 required
               />
